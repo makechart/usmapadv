@@ -20,7 +20,7 @@
     "livescript": "^1.6.0"
   },
   "devDependencies": {
-    "@makechart/viewer": "^0.0.8",
+    "@makechart/viewer": "^0.0.10",
     "d3-geo": "^3.1.2",
     "shapefile": "^0.6.6",
     "topojson-client": "^3.1.0",

@@ -15,8 +15,8 @@
   "author": "zbryikt",
   "license": "MIT",
   "dependencies": {
-    "@plotdb/srcbuild": "^0.0.69",
-    "fedep": "1.6.0",
+    "@plotdb/srcbuild": "^0.1.12",
+    "fedep": "1.9.0",
     "livescript": "^1.6.0"
   },
   "devDependencies": {

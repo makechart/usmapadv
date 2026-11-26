@@ -1,10 +1,32 @@
 # usmapadv 的 test case ( @makechart/viewer 的 mctest )
-# 資料大多來自範例資料 ( dist/sample/nation.json, sample() 依 level 取全國或單一州 )
-# 載不到時是空資料, 地圖照樣畫得出來, 所以要檢查
-sample = (fn) -> (c) -> c.mod.sample!then (d) ->
-  if d.raw.length < 5 => throw new Error("範例資料只有 #{d.raw.length} 列")
+# 資料大多來自範例資料 ( dist/sample/nation.json ), 跟 mod.sample 一樣: 全國用全部, 單一州只取該州的 county.
+# 以 suite.data 給 ( 不在 steps 裡載入 ), playground 選了 case 就有資料. data 的 function 是同步的, 所以用同步的 XHR
+nation = null
+load = ->
+  if nation => return nation
+  x = new XMLHttpRequest!
+  x.open \GET, "/assets/lib/#{mctest.info.name}/main/sample/nation.json", false
+  x.send!
+  if x.status != 200 => throw new Error("範例資料載入失敗: #{x.status}")
+  nation := JSON.parse x.responseText
+
+# state: 州名 ( 只取該州 ), fn: 改資料
+sample = (state, fn) -> ->
+  {head, units, rows} = load!
+  if state =>
+    rows = rows.filter((r) -> r.1 and r.0 == state).map (r) -> r.slice 1
+    head = head.slice 1
+  d =
+    raw: rows.map (r) -> Object.fromEntries head.map (h, i) -> [h, r[i]]
+    binding: {
+      town: {key: head.0}
+      value: {key: '65+ %', unit: units['65+ %']}
+      size: {key: \population, unit: units.population}
+      cat: {key: '65+ share'}
+      parts: [{key: \male, unit: units.male}, {key: \female, unit: units.female}]
+    } <<< (if state => {} else {village: {key: head.1}})
   if fn => fn d
-  c.set-raw d.raw, d.binding
+  d
 
 # 只留州 ( county 欄空白 ) / 只留 county
 states-only = (d) !-> d.raw = d.raw.filter (r) -> !r.county
@@ -40,32 +62,44 @@ interactions-is = (want) -> (c) ->
 mctest.suite do
   size: [600, 400]
   normalize: [[/tmap-grad-[a-z0-9]+/g, "tmap-grad-x"], [/tmap-clip-[a-z0-9]+/g, "tmap-clip-x"]]
-  # 資料在 steps 裡載入 ( 範例資料 ), 一開始是空的
-  data: empty: {raw: [], binding: {}}
+  # 沒指定 data 的 case 是空的 ( 在 steps 裡自己給資料 )
+  data:
+    empty: {raw: [], binding: {}}
+    nation: sample!
+    states: sample null, states-only
+    counties: sample null, counties-only
+    density: sample null, density
+    CA: sample \California
+    NY: sample "New York"
+    TX: sample \Texas, density
+    AK: sample \Alaska
+    HI: sample \Hawaii
+    PR: sample "Puerto Rico"
+    VA: sample \Virginia
   cases:
     # ---- 全國 ( 預設 level: nation ): 州 > county
-    * name: "nation", steps: [sample!]
-    * name: "nation:cat", config: {color-by: \cat}, steps: [sample!]
-    * name: "nation:density-log", config: {heat: {scale: \log}}, steps: [sample(density)]
-    * name: "nation:quantile-steps", config: {heat: {scale: \quantile, steps: 5}}, steps: [sample!]
-    * name: "nation:states-only", steps: [sample(states-only)]
+    * name: "nation", data: \nation
+    * name: "nation:cat", config: {color-by: \cat}, data: \nation
+    * name: "nation:density-log", config: {heat: {scale: \log}}, data: \density
+    * name: "nation:quantile-steps", config: {heat: {scale: \quantile, steps: 5}}, data: \nation
+    * name: "nation:states-only", data: \states
     # 沒有州的列: 由 county 匯總 ( 值是百分比, 取平均 )
-    * name: "nation:aggregate", config: {village: {aggregate: \mean}}, steps: [sample(counties-only)]
-    * name: "nation:counties", config: {village: {mode: \all}, border: {village: {width: 0.2}}}, steps: [sample!]
-    * name: "nation:counties-quantile", config: {village: {mode: \all}, heat: {scale: \quantile}, border: {village: {width: 0}}}, steps: [sample!]
-    * name: "nation:cartogram", config: {mode: \cartogram}, steps: [sample!]
-    * name: "nation:extrude", config: {extrude: {enabled: true, rotate: \none}}, steps: [sample!]
-    * name: "nation:bubble", config: {mode: \bubble}, steps: [sample!]
-    * name: "nation:bubble-counties", config: {mode: \bubble, village: {mode: \all}, bubble: {pie: \none}}, steps: [sample!]
-    * name: "nation:legend-bottom", config: {legend: {position: \bottom}}, steps: [sample!]
-    * name: "nation:click", steps: [sample!, click('06')]
-    * name: "nation:click-shift", steps: [sample!, click('06'), click('36', true)]
-    * name: "nation:zoom", config: {village: {zoom: true}}, steps: [sample!, click('06')]
-    * name: "nation:interactions", config: {filter-level: \village}, steps: [sample!, interactions-is {click: <[town village]>}]
+    * name: "nation:aggregate", config: {village: {aggregate: \mean}}, data: \counties
+    * name: "nation:counties", config: {village: {mode: \all}, border: {village: {width: 0.2}}}, data: \nation
+    * name: "nation:counties-quantile", config: {village: {mode: \all}, heat: {scale: \quantile}, border: {village: {width: 0}}}, data: \nation
+    * name: "nation:cartogram", config: {mode: \cartogram}, data: \nation
+    * name: "nation:extrude", config: {extrude: {enabled: true, rotate: \none}}, data: \nation
+    * name: "nation:bubble", config: {mode: \bubble}, data: \nation
+    * name: "nation:bubble-counties", config: {mode: \bubble, village: {mode: \all}, bubble: {pie: \none}}, data: \nation
+    * name: "nation:legend-bottom", config: {legend: {position: \bottom}}, data: \nation
+    * name: "nation:click", data: \nation, steps: [click('06')]
+    * name: "nation:click-shift", data: \nation, steps: [click('06'), click('36', true)]
+    * name: "nation:zoom", config: {village: {zoom: true}}, data: \nation, steps: [click('06')]
+    * name: "nation:interactions", config: {filter-level: \village}, data: \nation, steps: [interactions-is {click: <[town village]>}]
     * name: "nation:filter-emit"
       config: {filter-level: \village}
+      data: \nation
       steps:
-        sample!
         (c, ctx) ->
           c._mctest-filter = []
           c.on \filter, -> c._mctest-filter.push it
@@ -82,13 +116,13 @@ mctest.suite do
     * name: "nation:county-state", steps: [from-geo((-> "#{it.full}, #{it.town}"), 4), matched(3200)]
 
     # ---- 單一州: 只有 county 一層
-    * name: "state:CA", block: {level: 'state/CA'}, steps: [sample!, matched(58)]
-    * name: "state:by-name", block: {level: 'state/new york'}, steps: [sample!, matched(62)]
-    * name: "state:by-fips", block: {level: 'state/48'}, config: {heat: {scale: \log}}, steps: [sample(density), matched(254)]
+    * name: "state:CA", block: {level: 'state/CA'}, data: \CA, steps: [matched(58)]
+    * name: "state:by-name", block: {level: 'state/new york'}, data: \NY, steps: [matched(62)]
+    * name: "state:by-fips", block: {level: 'state/48'}, config: {heat: {scale: \log}}, data: \TX, steps: [matched(254)]
     # 阿拉斯加: 阿留申群島跨換日線
-    * name: "state:AK", block: {level: 'state/AK'}, steps: [sample!]
-    * name: "state:HI", block: {level: 'state/HI'}, config: {mode: \bubble}, steps: [sample!]
-    * name: "state:PR", block: {level: 'state/PR'}, config: {mode: \cartogram}, steps: [sample!]
+    * name: "state:AK", block: {level: 'state/AK'}, data: \AK
+    * name: "state:HI", block: {level: 'state/HI'}, config: {mode: \bubble}, data: \HI
+    * name: "state:PR", block: {level: 'state/PR'}, config: {mode: \cartogram}, data: \PR
     # Baltimore County 與 Baltimore city 同名; 不帶字尾算 county
     * name: "state:MD-names", block: {level: 'state/MD'}
       steps:
@@ -99,8 +133,8 @@ mctest.suite do
           want = {"24005": 1, "24510": 2, "24033": 3}
           if JSON.stringify(got) != JSON.stringify(want) => throw new Error("對到 #{JSON.stringify got}")
     # 維吉尼亞的獨立市 ( 只有 city 的不帶字尾也認得 )
-    * name: "state:VA", block: {level: 'state/VA'}, steps: [sample!, matched(133)]
-    * name: "state:extrude", block: {level: 'state/CA'}, config: {extrude: {enabled: true, rotate: \none}}, steps: [sample!]
-    * name: "state:click", block: {level: 'state/CA'}, steps: [sample!, click('06037')]
+    * name: "state:VA", block: {level: 'state/VA'}, data: \VA, steps: [matched(133)]
+    * name: "state:extrude", block: {level: 'state/CA'}, config: {extrude: {enabled: true, rotate: \none}}, data: \CA
+    * name: "state:click", block: {level: 'state/CA'}, data: \CA, steps: [click('06037')]
     # 屬地: 沒有範例資料, 只畫地圖
     * name: "state:GU", block: {level: 'state/GU'}

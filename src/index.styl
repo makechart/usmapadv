@@ -1,0 +1,26 @@
+.pdl-layout > div[data-type=layout]
+  display: grid
+  grid-template-columns: 1fr fit-content(8em)
+  grid-template-rows: 1fr auto
+  & > .pdl-cell[data-name=view]
+    grid-row: 1 / span 2
+  & > .pdl-cell[data-name=legend]
+    padding-left: 1em
+
+.pdl-layout.legend-bottom > div[data-type=layout]
+  grid-template-columns: 1fr
+  grid-template-rows: 1fr auto auto
+  & > .pdl-cell[data-name=view]
+    grid-row: auto
+  & > .pdl-cell[data-name=legend]
+    padding: 1em 0 0 0
+
+/* 數值的色條 ( 自己畫在 layout 的 scale 群組裡 ), 這裡只撐出大小 */
+.pdl-cell[data-name=scale]
+  padding: .5em
+  & > div
+    width: 4.5em
+    height: 10em
+.pdl-layout.legend-bottom .pdl-cell[data-name=scale] > div
+  width: auto
+  height: 2em
